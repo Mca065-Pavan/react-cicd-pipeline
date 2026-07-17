@@ -4,6 +4,8 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'mca065/react-cicd-demo'
         DOCKER_TAG = "${env.BUILD_NUMBER}"
+        KUBECTL = "${env.HOME}/kubectl"
+        KUBECONFIG = "${env.HOME}/.kube/config"
     }
 
     stages {
@@ -63,10 +65,10 @@ pipeline {
             steps {
                 echo '===== Stage 6: Deploying to Kubernetes cluster (Minikube) ====='
                 sh '''
-                    /tmp/kubectl --kubeconfig=/tmp/kubeconfig set image deployment/react-app \
+                    ${KUBECTL} set image deployment/react-app \
                         react-app=${DOCKER_IMAGE}:${DOCKER_TAG} \
                         --record
-                    /tmp/kubectl --kubeconfig=/tmp/kubeconfig rollout status deployment/react-app --timeout=120s
+                    ${KUBECTL} rollout status deployment/react-app --timeout=120s
                 '''
                 echo 'Deployed to Kubernetes successfully!'
             }
@@ -76,8 +78,8 @@ pipeline {
             steps {
                 echo '===== Stage 7: Verifying deployment ====='
                 sh '''
-                    /tmp/kubectl --kubeconfig=/tmp/kubeconfig get pods -l app=react-app
-                    /tmp/kubectl --kubeconfig=/tmp/kubeconfig get services react-app-service
+                    ${KUBECTL} get pods -l app=react-app
+                    ${KUBECTL} get services react-app-service
                 '''
                 echo 'Deployment verified successfully!'
             }
