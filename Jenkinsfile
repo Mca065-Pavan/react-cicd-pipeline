@@ -4,7 +4,6 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'mca065/react-cicd-demo'
         DOCKER_TAG = "${env.BUILD_NUMBER}"
-        PATH = "${env.HOME}/.local/bin:${env.PATH}"
     }
 
     stages {
@@ -60,59 +59,14 @@ pipeline {
             }
         }
 
-        stage('Setup Kubectl') {
-            steps {
-                echo '===== Stage 5.5: Setting up kubectl ====='
-                sh '''
-                    curl -LO "https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl"
-                    chmod +x kubectl
-                    mkdir -p $HOME/.local/bin
-                    mv kubectl $HOME/.local/bin/
-                '''
-                sh '''
-                    mkdir -p $HOME/.kube
-                    cp /tmp/k8s-certs/ca.crt $HOME/.kube/
-                    cp /tmp/k8s-certs/client.crt $HOME/.kube/
-                    cp /tmp/k8s-certs/client.key $HOME/.kube/
-                '''
-                sh '''
-                    cat > $HOME/.kube/config << KUBECONFIG
-apiVersion: v1
-clusters:
-- cluster:
-    certificate-authority: ${HOME}/.kube/ca.crt
-    server: https://192.168.49.2:8443
-  name: minikube
-contexts:
-- context:
-    cluster: minikube
-    user: minikube
-  name: minikube
-current-context: minikube
-kind: Config
-users:
-- name: minikube
-  user:
-    client-certificate: ${HOME}/.kube/client.crt
-    client-key: ${HOME}/.kube/client.key
-KUBECONFIG
-                '''
-                sh '''
-                    echo "Testing kubectl connection..."
-                    $HOME/.local/bin/kubectl get nodes
-                    echo "Kubectl configured successfully!"
-                '''
-            }
-        }
-
         stage('Deploy to Kubernetes') {
             steps {
                 echo '===== Stage 6: Deploying to Kubernetes cluster (Minikube) ====='
                 sh '''
-                    $HOME/.local/bin/kubectl set image deployment/react-app \
+                    /tmp/kubectl --kubeconfig=/tmp/kubeconfig set image deployment/react-app \
                         react-app=${DOCKER_IMAGE}:${DOCKER_TAG} \
                         --record
-                    $HOME/.local/bin/kubectl rollout status deployment/react-app --timeout=120s
+                    /tmp/kubectl --kubeconfig=/tmp/kubeconfig rollout status deployment/react-app --timeout=120s
                 '''
                 echo 'Deployed to Kubernetes successfully!'
             }
@@ -122,8 +76,8 @@ KUBECONFIG
             steps {
                 echo '===== Stage 7: Verifying deployment ====='
                 sh '''
-                    $HOME/.local/bin/kubectl get pods -l app=react-app
-                    $HOME/.local/bin/kubectl get services react-app-service
+                    /tmp/kubectl --kubeconfig=/tmp/kubeconfig get pods -l app=react-app
+                    /tmp/kubectl --kubeconfig=/tmp/kubeconfig get services react-app-service
                 '''
                 echo 'Deployment verified successfully!'
             }
