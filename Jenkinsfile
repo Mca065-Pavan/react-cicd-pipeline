@@ -4,8 +4,8 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'mca065/react-cicd-demo'
         DOCKER_TAG = "${env.BUILD_NUMBER}"
-        KUBECTL = "${env.HOME}/kubectl"
-        KUBECONFIG = "${env.HOME}/.kube/config"
+        KUBECTL = '/home/pavan/.local/bin/kubectl'
+        KUBECONFIG = '/home/pavan/.kube/config'
     }
 
     stages {
