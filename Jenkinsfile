@@ -4,7 +4,6 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'mca065/react-cicd-demo'
         DOCKER_TAG = "${env.BUILD_NUMBER}"
-        KUBECONFIG = "${env.HOME}/.kube/config"
     }
 
     stages {
@@ -42,7 +41,7 @@ pipeline {
             }
         }
 
-        stage('Docker Build & Push') {
+        stage('Docker Build and Push') {
             steps {
                 echo '===== Stage 5: Building Docker image and pushing to Docker Hub ====='
                 withCredentials([usernamePassword(
@@ -50,7 +49,7 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
                     sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
                     sh "docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest"
                     sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
@@ -60,15 +59,53 @@ pipeline {
             }
         }
 
+        stage('Setup Kubectl') {
+            steps {
+                echo '===== Stage 5.5: Setting up kubectl ====='
+                sh '''
+                    curl -LO "https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl"
+                    chmod +x kubectl
+                    mkdir -p $HOME/.local/bin
+                    mv kubectl $HOME/.local/bin/
+                    export PATH="$HOME/.local/bin:$PATH"
+                    mkdir -p $HOME/.kube
+                    cp /tmp/k8s-certs/ca.crt /tmp/k8s-certs/client.crt /tmp/k8s-certs/client.key $HOME/.kube/
+                    cat > $HOME/.kube/config <<EOF
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority: $HOME/.kube/ca.crt
+    server: https://192.168.49.2:8443
+  name: minikube
+contexts:
+- context:
+    cluster: minikube
+    user: minikube
+  name: minikube
+current-context: minikube
+kind: Config
+users:
+- name: minikube
+  user:
+    client-certificate: $HOME/.kube/client.crt
+    client-key: $HOME/.kube/client.key
+EOF
+                    kubectl get nodes
+                '''
+                echo 'Kubectl configured successfully!'
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
                 echo '===== Stage 6: Deploying to Kubernetes cluster (Minikube) ====='
-                sh """
+                sh '''
+                    export PATH="$HOME/.local/bin:$PATH"
                     kubectl set image deployment/react-app \
                         react-app=${DOCKER_IMAGE}:${DOCKER_TAG} \
                         --record
                     kubectl rollout status deployment/react-app --timeout=120s
-                """
+                '''
                 echo 'Deployed to Kubernetes successfully!'
             }
         }
@@ -77,6 +114,7 @@ pipeline {
             steps {
                 echo '===== Stage 7: Verifying deployment ====='
                 sh '''
+                    export PATH="$HOME/.local/bin:$PATH"
                     kubectl get pods -l app=react-app
                     kubectl get services react-app-service
                 '''
